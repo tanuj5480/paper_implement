@@ -27,7 +27,7 @@ class SelfAttention(nn.Module):
         keys = self.W_keys(x)
         values = self.W_values(x)
 
-        attention_scores = queries @ keys.T
+        attention_scores = (queries @ keys.T) / (emb_dim ** 0.5)
         attentions_weight = F.softmax(attention_scores, dim=1)
 
         context_vec = attentions_weight @ values
@@ -37,14 +37,20 @@ class SelfAttention(nn.Module):
 
 if __name__ == "__main__":
     
-    x = torch.tensor(
+    base_matrix = torch.tensor(
         [[0.1, 0.2, 0.1, 0.5],   # Token 0 ("the")
         [0.8, 0.9, 0.1, 0.0],   # Token 1 ("dog")
         [0.9, 0.8, 0.2, 0.1]]   # Token 2 ("barked")
     )    
 
-    print ('input vector shape:', x.shape)
+    batch_1 = base_matrix.clone()
+    batch_2 = base_matrix + torch.randn_like(base_matrix) * 0.05 
+    batch_3 = base_matrix + torch.randn_like(base_matrix) * 0.1
 
-    attention_layer = SelfAttention(x.shape[1], 4)
-    output_tensor = attention_layer(x)
+    dataset = batch_1+batch_2+batch_3
+
+    print ('input vector shape:', dataset.shape)
+
+    attention_layer = SelfAttention(dataset.shape[1], 4)
+    output_tensor = attention_layer(dataset)
     print (output_tensor)
