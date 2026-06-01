@@ -11,23 +11,23 @@ import torch.nn.functional as F
 torch.manual_seed(123)
 class SelfAttention(nn.Module):
 
-    def __init__(self, d_in, d_out):
+    def __init__(self, d_in, d_out, qkv_bias=False):
         super().__init__()
         self.d_in = d_in
         self.d_out = d_out
 
-        self.W_query = nn.Linear(d_in, d_out, bias=False)
-        self.W_keys = nn.Linear(d_in, d_out, bias=False)
-        self.W_values = nn.Linear(d_in, d_out, bias=False)
+        self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_keys = nn.Linear(d_in, d_out, bias=qkv_bias)
+        self.W_values = nn.Linear(d_in, d_out, bias=qkv_bias)
 
     def forward(self, x):
 
-        rows, emb_dim = x.shape
+        b, rows, emb_dim = x.shape
         queries = self.W_query(x)
         keys = self.W_keys(x)
         values = self.W_values(x)
 
-        attention_scores = (queries @ keys.T) / (emb_dim ** 0.5)
+        attention_scores = (queries @ keys.transpose(1,2)) / (keys.shape[-1] ** 0.5)
         attentions_weight = F.softmax(attention_scores, dim=1)
 
         context_vec = attentions_weight @ values
@@ -47,10 +47,24 @@ if __name__ == "__main__":
     batch_2 = base_matrix + torch.randn_like(base_matrix) * 0.05 
     batch_3 = base_matrix + torch.randn_like(base_matrix) * 0.1
 
-    dataset = batch_1+batch_2+batch_3
+    dataset = torch.stack((batch_1,batch_2,batch_3), dim=0)
 
     print ('input vector shape:', dataset.shape)
 
-    attention_layer = SelfAttention(dataset.shape[1], 4)
+    attention_layer = SelfAttention(dataset.shape[2], 2)
     output_tensor = attention_layer(dataset)
     print (output_tensor)
+
+    # sample output
+    # input vector shape: torch.Size([3, 3, 4])
+    # tensor([[[-0.1252, -0.0133],
+    #      [-0.1381, -0.0308],
+    #      [-0.1367, -0.0296]],
+
+    #     [[-0.1181, -0.0193],
+    #      [-0.1313, -0.0373],
+    #      [-0.1301, -0.0365]],
+
+    #     [[-0.1206, -0.0111],
+    #      [-0.1357, -0.0365],
+    #      [-0.1367, -0.0388]]], grad_fn=<UnsafeViewBackward0>)
