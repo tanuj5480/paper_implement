@@ -22,12 +22,12 @@ class SelfAttention(nn.Module):
 
     def forward(self, x):
 
-        rows, emb_dim = x.shape
+        b, rows, emb_dim = x.shape
         queries = self.W_query(x)
         keys = self.W_keys(x)
         values = self.W_values(x)
 
-        attention_scores = (queries @ keys.T) / (emb_dim ** 0.5)
+        attention_scores = (queries @ keys.transpose(1,2)) / (emb_dim ** 0.5)
         attentions_weight = F.softmax(attention_scores, dim=1)
 
         context_vec = attentions_weight @ values
@@ -47,10 +47,10 @@ if __name__ == "__main__":
     batch_2 = base_matrix + torch.randn_like(base_matrix) * 0.05 
     batch_3 = base_matrix + torch.randn_like(base_matrix) * 0.1
 
-    dataset = batch_1+batch_2+batch_3
+    dataset = torch.stack((batch_1,batch_2,batch_3), dim=0)
 
     print ('input vector shape:', dataset.shape)
 
-    attention_layer = SelfAttention(dataset.shape[1], 4)
+    attention_layer = SelfAttention(dataset.shape[2], 2)
     output_tensor = attention_layer(dataset)
     print (output_tensor)
