@@ -28,7 +28,6 @@ class SelfAttention(nn.Module):
         values = self.W_values(x)
 
         attention_scores = (queries @ keys.transpose(1,2)) / (keys.shape[-1] ** 0.5)
-        print (attention_scores.shape)
         
         # causal mask addition
         seq_len = attention_scores.shape[-1]
@@ -64,15 +63,16 @@ if __name__ == "__main__":
     print (output_tensor)
 
     # sample output
+    # torch.Size([3, 3, 3])
     # input vector shape: torch.Size([3, 3, 4])
-    # tensor([[[-0.1252, -0.0133],
-    #      [-0.1381, -0.0308],
-    #      [-0.1367, -0.0296]],
+    # tensor([[[-0.0194,  0.0688],
+    #      [-0.0947, -0.0051],
+    #      [-0.2858, -0.1373]],
 
-    #     [[-0.1181, -0.0193],
-    #      [-0.1313, -0.0373],
-    #      [-0.1301, -0.0365]],
+    #     [[-0.0179,  0.0657],
+    #      [-0.0834, -0.0078],
+    #      [-0.2782, -0.1509]],
 
-    #     [[-0.1206, -0.0111],
-    #      [-0.1357, -0.0365],
-    #      [-0.1367, -0.0388]]], grad_fn=<UnsafeViewBackward0>)
+    #     [[-0.0242,  0.0869],
+    #      [-0.0946, -0.0143],
+    #      [-0.2743, -0.1590]]], grad_fn=<UnsafeViewBackward0>)
