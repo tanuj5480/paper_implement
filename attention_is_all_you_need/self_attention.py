@@ -54,3 +54,17 @@ if __name__ == "__main__":
     attention_layer = SelfAttention(dataset.shape[2], 2)
     output_tensor = attention_layer(dataset)
     print (output_tensor)
+
+    # sample output
+    # input vector shape: torch.Size([3, 3, 4])
+    # tensor([[[-0.1275, -0.0165],
+    #      [-0.1367, -0.0289],
+    #      [-0.1357, -0.0281]],
+
+    #     [[-0.1205, -0.0227],
+    #      [-0.1299, -0.0355],
+    #      [-0.1291, -0.0349]],
+
+    #     [[-0.1236, -0.0162],
+    #      [-0.1344, -0.0343],
+    #      [-0.1351, -0.0359]]], grad_fn=<UnsafeViewBackward0>)
