@@ -27,7 +27,7 @@ class SelfAttention(nn.Module):
         keys = self.W_keys(x)
         values = self.W_values(x)
 
-        attention_scores = (queries @ keys.transpose(1,2)) / (emb_dim ** 0.5)
+        attention_scores = (queries @ keys.transpose(1,2)) / (keys.shape[-1] ** 0.5)
         attentions_weight = F.softmax(attention_scores, dim=1)
 
         context_vec = attentions_weight @ values
@@ -57,14 +57,14 @@ if __name__ == "__main__":
 
     # sample output
     # input vector shape: torch.Size([3, 3, 4])
-    # tensor([[[-0.1275, -0.0165],
-    #      [-0.1367, -0.0289],
-    #      [-0.1357, -0.0281]],
+    # tensor([[[-0.1252, -0.0133],
+    #      [-0.1381, -0.0308],
+    #      [-0.1367, -0.0296]],
 
-    #     [[-0.1205, -0.0227],
-    #      [-0.1299, -0.0355],
-    #      [-0.1291, -0.0349]],
+    #     [[-0.1181, -0.0193],
+    #      [-0.1313, -0.0373],
+    #      [-0.1301, -0.0365]],
 
-    #     [[-0.1236, -0.0162],
-    #      [-0.1344, -0.0343],
-    #      [-0.1351, -0.0359]]], grad_fn=<UnsafeViewBackward0>)
+    #     [[-0.1206, -0.0111],
+    #      [-0.1357, -0.0365],
+    #      [-0.1367, -0.0388]]], grad_fn=<UnsafeViewBackward0>)
