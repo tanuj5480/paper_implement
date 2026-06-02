@@ -9,7 +9,7 @@ import torch.nn.functional as F
 # print (z)
 
 torch.manual_seed(123)
-class SelfAttention(nn.Module):
+class CausalSelfAttention(nn.Module):
 
     def __init__(self, d_in, d_out, qkv_bias=False):
         super().__init__()
@@ -58,7 +58,7 @@ if __name__ == "__main__":
 
     print ('input vector shape:', dataset.shape)
 
-    attention_layer = SelfAttention(dataset.shape[2], 2)
+    attention_layer = CausalSelfAttention(dataset.shape[2], 2)
     output_tensor = attention_layer(dataset)
     print (output_tensor)
 
