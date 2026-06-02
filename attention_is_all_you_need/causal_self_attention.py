@@ -11,11 +11,12 @@ import torch.nn.functional as F
 torch.manual_seed(123)
 class CausalSelfAttention(nn.Module):
 
-    def __init__(self, d_in, d_out, qkv_bias=False):
+    def __init__(self, d_in, d_out, context_length, dropout, qkv_bias=False):
         super().__init__()
         self.d_in = d_in
         self.d_out = d_out
 
+        self.dropout = nn.Dropout(dropout) # New
         self.W_query = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.W_keys = nn.Linear(d_in, d_out, bias=qkv_bias)
         self.W_values = nn.Linear(d_in, d_out, bias=qkv_bias)
@@ -36,6 +37,7 @@ class CausalSelfAttention(nn.Module):
 
         # new attention weights after masking
         attentions_weight = F.softmax(masked_attention_scores, dim=1)
+        attentions_weight = self.dropout(attentions_weight) # New
 
         context_vec = attentions_weight @ values
 
@@ -55,15 +57,15 @@ if __name__ == "__main__":
     batch_3 = base_matrix + torch.randn_like(base_matrix) * 0.1
 
     dataset = torch.stack((batch_1,batch_2,batch_3), dim=0)
+    context_length = dataset.shape[1] # This is the number of tokens
 
     print ('input vector shape:', dataset.shape)
 
-    attention_layer = CausalSelfAttention(dataset.shape[2], 2)
+    attention_layer = CausalSelfAttention(dataset.shape[2], 2, context_length, 0.0)
     output_tensor = attention_layer(dataset)
     print (output_tensor)
 
     # sample output
-    # torch.Size([3, 3, 3])
     # input vector shape: torch.Size([3, 3, 4])
     # tensor([[[-0.0194,  0.0688],
     #      [-0.0947, -0.0051],
