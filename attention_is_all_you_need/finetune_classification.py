@@ -10,7 +10,7 @@ import urllib
 # from gpt_download import download_and_load_gpt2
 from gpt import GPT
 from utils.utils import load_weights_into_gpt, generate_text_simple, generate, text_to_token_ids, token_ids_to_text
-from utils.loss_and_eval_metrics import calc_loss_loader, calc_loss_batch
+from utils.loss_and_eval_metrics import calc_loss_loader, calc_loss_batch, calc_accuracy_loader
 import time
 
 
@@ -54,7 +54,6 @@ except (requests.exceptions.RequestException, TimeoutError) as e:
 
 
 df = pd.read_csv(data_file_path, sep="\t", header=None, names=["Label", "Text"])
-print (df.head())
 print(df["Label"].value_counts())
 
 def create_balanced_dataset(df):
@@ -288,28 +287,6 @@ for param in model.final_norm.parameters():
 
 model.to(device) # no assignment model = model.to(device) necessary for nn.Module classes
 torch.manual_seed(123) # For reproducibility due to the shuffling in the training data loader
-
-def calc_accuracy_loader(data_loader, model, device, num_batches=None):
-    model.eval()
-    correct_predictions, num_examples = 0, 0
-
-    if num_batches is None:
-        num_batches = len(data_loader)
-    else:
-        num_batches = min(num_batches, len(data_loader))
-    for i, (input_batch, target_batch) in enumerate(data_loader):
-        if i < num_batches:
-            input_batch, target_batch = input_batch.to(device), target_batch.to(device)
-
-            with torch.no_grad():
-                logits = model(input_batch)[:, -1, :]  # Logits of last output token
-            predicted_labels = torch.argmax(logits, dim=-1)
-
-            num_examples += predicted_labels.shape[0]
-            correct_predictions += (predicted_labels == target_batch).sum().item()
-        else:
-            break
-    return correct_predictions / num_examples
 
 train_accuracy = calc_accuracy_loader(train_loader, model, device, num_batches=10)
 val_accuracy = calc_accuracy_loader(val_loader, model, device, num_batches=10)
