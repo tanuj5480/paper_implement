@@ -6,6 +6,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import tiktoken
+import numpy as np
+import os
+from pathlib import Path
+import urllib
+from utils.utils import generate_text_simple, generate, text_to_token_ids, token_ids_to_text
+
 
 class GPT(nn.Module):
     def __init__(self, cfg):
@@ -34,34 +40,6 @@ class GPT(nn.Module):
         logits = self.out_head(x)
         return logits
 
-
-def generate_text_simple(model, idx, max_new_tokens, context_size):
-    # idx is (batch, n_tokens) array of indices in the current context
-    for _ in range(max_new_tokens):
-        
-        # Crop current context if it exceeds the supported context size
-        # E.g., if LLM supports only 5 tokens, and the context size is 10
-        # then only the last 5 tokens are used as context
-        idx_cond = idx[:, -context_size:]
-        
-        # Get the predictions
-        with torch.no_grad():
-            logits = model(idx_cond)
-        
-        # Focus only on the last time step
-        # (batch, n_tokens, vocab_size) becomes (batch, vocab_size)
-        logits = logits[:, -1, :]  
-
-        # Apply softmax to get probabilities
-        probas = torch.softmax(logits, dim=-1)  # (batch, vocab_size)
-
-        # Get the idx of the vocab entry with the highest probability value
-        idx_next = torch.argmax(probas, dim=-1, keepdim=True)  # (batch, 1)
-
-        # Append sampled index to the running sequence
-        idx = torch.cat((idx, idx_next), dim=1)  # (batch, n_tokens+1)
-
-    return idx
 
 if __name__ == "__main__":
 
@@ -117,3 +95,74 @@ if __name__ == "__main__":
     print("Output length:", len(out[0]))
     decoded_text = tokenizer.decode(out.squeeze(0).tolist())
     print(decoded_text)
+
+    # gpt = GPT(GPT_CONFIG_124M)
+    # load_weights_into_gpt(gpt, params)
+    # gpt.to(device)
+
+
+    CHOOSE_MODEL = "gpt2-small (124M)"
+    INPUT_PROMPT = "Every effort moves"
+
+    BASE_CONFIG = {
+        "vocab_size": 50257,     # Vocabulary size
+        "context_length": 1024,  # Context length
+        "drop_rate": 0.0,        # Dropout rate
+        "qkv_bias": True         # Query-key-value bias
+    }
+
+    model_configs = {
+        "gpt2-small (124M)": {"emb_dim": 768, "n_layers": 12, "n_heads": 12},
+        "gpt2-medium (355M)": {"emb_dim": 1024, "n_layers": 24, "n_heads": 16},
+        "gpt2-large (774M)": {"emb_dim": 1280, "n_layers": 36, "n_heads": 20},
+        "gpt2-xl (1558M)": {"emb_dim": 1600, "n_layers": 48, "n_heads": 25},
+    }
+
+    BASE_CONFIG.update(model_configs[CHOOSE_MODEL])
+
+    file_name = "gpt2-small-124M.pth"
+    # file_name = "gpt2-medium-355M.pth"
+    # file_name = "gpt2-large-774M.pth"
+    # file_name = "gpt2-xl-1558M.pth"
+
+    url = f"https://huggingface.co/rasbt/gpt2-from-scratch-pytorch/resolve/main/{file_name}"
+
+    if not os.path.exists(file_name):
+        urllib.request.urlretrieve(url, file_name)
+        print(f"Downloaded to {file_name}")
+
+    gpt = GPT(BASE_CONFIG)
+    gpt.load_state_dict(torch.load(file_name, weights_only=True))
+    gpt.eval()
+
+
+    device = torch.device("cpu")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        # Use PyTorch 2.9 or newer for stable mps results
+        major, minor = map(int, torch.__version__.split(".")[:2])
+        if (major, minor) >= (2, 9):
+            device = torch.device("mps")
+
+    print (device)
+    gpt.to(device)
+
+    torch.manual_seed(123)
+    # Copy the base configuration and update with specific model settings
+    model_name = "gpt2-small (124M)"  # Example model name
+    NEW_CONFIG = GPT_CONFIG_124M.copy()
+    NEW_CONFIG.update(model_configs[model_name])
+    NEW_CONFIG.update({"context_length": 1024, "qkv_bias": True})
+    print (NEW_CONFIG)
+
+    token_ids = generate(
+        model=gpt,
+        idx=text_to_token_ids("Every effort moves you", tokenizer).to(device),
+        max_new_tokens=25,
+        context_size=NEW_CONFIG["context_length"],
+        top_k=50,
+        temperature=1.5
+    )
+
+    print("Output text:\n", token_ids_to_text(token_ids, tokenizer))
