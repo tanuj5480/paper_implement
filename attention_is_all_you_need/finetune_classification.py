@@ -10,6 +10,9 @@ import urllib
 # from gpt_download import download_and_load_gpt2
 from gpt import GPT
 from utils.utils import load_weights_into_gpt, generate_text_simple, generate, text_to_token_ids, token_ids_to_text
+from utils.loss_and_eval_metrics import calc_loss_loader, calc_loss_batch, calc_accuracy_loader
+import time
+
 
 
 url = "https://archive.ics.uci.edu/static/public/228/sms+spam+collection.zip"
@@ -51,7 +54,6 @@ except (requests.exceptions.RequestException, TimeoutError) as e:
 
 
 df = pd.read_csv(data_file_path, sep="\t", header=None, names=["Label", "Text"])
-print (df.head())
 print(df["Label"].value_counts())
 
 def create_balanced_dataset(df):
@@ -174,7 +176,6 @@ test_dataset = SpamDataset(
 
 
 
-
 # ##########################
 # Data loader
 # ##########################
@@ -259,5 +260,93 @@ token_ids = generate_text_simple(
     context_size=BASE_CONFIG["context_length"]
 )
 
+device = torch.device("cpu")
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    # Use PyTorch 2.9 or newer for stable mps results
+    major, minor = map(int, torch.__version__.split(".")[:2])
+    if (major, minor) >= (2, 9):
+        device = torch.device("mps")
+
 print(token_ids_to_text(token_ids, tokenizer))
 
+# set all the params to non-trainable
+for param in model.parameters():
+    param.requires_grad = False
+
+# adjusting the model head for binary classification
+num_classes = 2
+model.out_head = torch.nn.Linear(in_features=BASE_CONFIG["emb_dim"], out_features=num_classes)
+
+for param in model.trf_blocks[-1].parameters():
+    param.requires_grad = True
+
+for param in model.final_norm.parameters():
+    param.requires_grad = True
+
+model.to(device) # no assignment model = model.to(device) necessary for nn.Module classes
+torch.manual_seed(123) # For reproducibility due to the shuffling in the training data loader
+
+train_accuracy = calc_accuracy_loader(train_loader, model, device, num_batches=10)
+val_accuracy = calc_accuracy_loader(val_loader, model, device, num_batches=10)
+test_accuracy = calc_accuracy_loader(test_loader, model, device, num_batches=10)
+
+print(f"Training accuracy: {train_accuracy*100:.2f}%")
+print(f"Validation accuracy: {val_accuracy*100:.2f}%")
+print(f"Test accuracy: {test_accuracy*100:.2f}%")
+
+def train_classifier_simple(model, train_loader, val_loader, optimizer, device, num_epochs,
+                            eval_freq, eval_iter):
+    # Initialize lists to track losses and examples seen
+    train_losses, val_losses, train_accs, val_accs = [], [], [], []
+    examples_seen, global_step = 0, -1
+
+    # Main training loop
+    for epoch in range(num_epochs):
+        model.train()  # Set model to training mode
+
+        for input_batch, target_batch in train_loader:
+            optimizer.zero_grad() # Reset loss gradients from previous batch iteration
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
+            loss.backward() # Calculate loss gradients
+            optimizer.step() # Update model weights using loss gradients
+            examples_seen += input_batch.shape[0] # New: track examples instead of tokens
+            global_step += 1
+
+            # Optional evaluation step
+            if global_step % eval_freq == 0:
+                train_loss, val_loss = evaluate_model(
+                    model, train_loader, val_loader, device, eval_iter)
+                train_losses.append(train_loss)
+                val_losses.append(val_loss)
+                print(f"Ep {epoch+1} (Step {global_step:06d}): "
+                      f"Train loss {train_loss:.3f}, Val loss {val_loss:.3f}")
+
+        # Calculate accuracy after each epoch
+        train_accuracy = calc_accuracy_loader(train_loader, model, device, num_batches=eval_iter)
+        val_accuracy = calc_accuracy_loader(val_loader, model, device, num_batches=eval_iter)
+        print(f"Training accuracy: {train_accuracy*100:.2f}% | ", end="")
+        print(f"Validation accuracy: {val_accuracy*100:.2f}%")
+        train_accs.append(train_accuracy)
+        val_accs.append(val_accuracy)
+
+    return train_losses, val_losses, train_accs, val_accs, examples_seen
+
+
+
+
+start_time = time.time()
+torch.manual_seed(123)
+
+# train on GPU
+# optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.1)
+# num_epochs = 5
+# train_losses, val_losses, train_accs, val_accs, examples_seen = train_classifier_simple(
+#     model, train_loader, val_loader, optimizer, device,
+#     num_epochs=num_epochs, eval_freq=50, eval_iter=5,
+# )
+
+end_time = time.time()
+execution_time_minutes = (end_time - start_time) / 60
+print(f"Training completed in {execution_time_minutes:.2f} minutes.")
