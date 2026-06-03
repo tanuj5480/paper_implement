@@ -51,6 +51,8 @@ train_data = text_data[:split_idx]
 val_data = text_data[split_idx:]
 torch.manual_seed(123)
 
+print ('len of the training data:', len(train_data))
+
 train_loader = create_dataloader_v1(
     train_data,
     batch_size=2,
@@ -60,6 +62,18 @@ train_loader = create_dataloader_v1(
     shuffle=True,
     num_workers=0
 )
+
+# 1. Convert the DataLoader into a Python Iterator
+data_iter = iter(train_loader)
+# 2. Extract exactly one batch of data
+batch = next(data_iter)
+# 3. If your DataLoader returns features and labels: (images, labels) or (inputs, targets)
+inputs, targets = batch
+
+# 4. Print shapes and data types
+print("--- Single Batch Inspection ---")
+print(f"Inputs Shape : {inputs.shape}")   # e.g., torch.Size([32, 3, 224, 224])
+
 
 val_loader = create_dataloader_v1(
     val_data,
@@ -203,27 +217,27 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
     print(decoded_text.replace("\n", " "))  # Compact print format
     model.train()
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
     
-    # Note:
-    # Uncomment the following code to calculate the execution time
-    import time
-    start_time = time.time()
+# Note:
+# Uncomment the following code to calculate the execution time
+import time
+start_time = time.time()
 
-    torch.manual_seed(123)
-    model = GPT(GPT_CONFIG_124M)
-    model.to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1)
+torch.manual_seed(123)
+model = GPT(GPT_CONFIG_124M)
+model.to(device)
+optimizer = torch.optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1)
 
-    num_epochs = 10
-    train_losses, val_losses, tokens_seen = train_model_simple(
-        model, train_loader, val_loader, optimizer, device,
-        num_epochs=num_epochs, eval_freq=5, eval_iter=5,
-        start_context="Every effort moves you", tokenizer=tokenizer
-    )
+num_epochs = 10
+train_losses, val_losses, tokens_seen = train_model_simple(
+    model, train_loader, val_loader, optimizer, device,
+    num_epochs=num_epochs, eval_freq=5, eval_iter=5,
+    start_context="Every effort moves you", tokenizer=tokenizer
+)
 
-    # Note:
-    # Uncomment the following code to show the execution time
-    end_time = time.time()
-    execution_time_minutes = (end_time - start_time) / 60
-    print(f"Training completed in {execution_time_minutes:.2f} minutes.")
+# Note:
+# Uncomment the following code to show the execution time
+end_time = time.time()
+execution_time_minutes = (end_time - start_time) / 60
+print(f"Training completed in {execution_time_minutes:.2f} minutes.")
