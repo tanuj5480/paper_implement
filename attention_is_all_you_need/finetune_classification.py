@@ -10,7 +10,7 @@ import urllib
 # from gpt_download import download_and_load_gpt2
 from gpt import GPT
 from utils.utils import load_weights_into_gpt, generate_text_simple, generate, text_to_token_ids, token_ids_to_text
-from utils.loss_and_eval_metrics import calc_loss_loader, calc_loss_batch, calc_accuracy_loader
+from utils.loss_and_eval_metrics import calc_loss_loader, calc_loss_batch, calc_accuracy_loader, evaluate_model
 import time
 
 
@@ -340,13 +340,88 @@ start_time = time.time()
 torch.manual_seed(123)
 
 # train on GPU
-# optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.1)
-# num_epochs = 5
-# train_losses, val_losses, train_accs, val_accs, examples_seen = train_classifier_simple(
-#     model, train_loader, val_loader, optimizer, device,
-#     num_epochs=num_epochs, eval_freq=50, eval_iter=5,
-# )
+optimizer = torch.optim.AdamW(model.parameters(), lr=5e-5, weight_decay=0.1)
+num_epochs = 5
+train_losses, val_losses, train_accs, val_accs, examples_seen = train_classifier_simple(
+    model, train_loader, val_loader, optimizer, device,
+    num_epochs=num_epochs, eval_freq=50, eval_iter=5,
+)
 
 end_time = time.time()
 execution_time_minutes = (end_time - start_time) / 60
 print(f"Training completed in {execution_time_minutes:.2f} minutes.")
+
+
+train_accuracy = calc_accuracy_loader(train_loader, model, device)
+val_accuracy = calc_accuracy_loader(val_loader, model, device)
+test_accuracy = calc_accuracy_loader(test_loader, model, device)
+
+print(f"Training accuracy: {train_accuracy*100:.2f}%")
+print(f"Validation accuracy: {val_accuracy*100:.2f}%")
+print(f"Test accuracy: {test_accuracy*100:.2f}%")
+
+
+def classify_review(text, model, tokenizer, device, max_length=None, pad_token_id=50256):
+    model.eval()
+
+    # Prepare inputs to the model
+    input_ids = tokenizer.encode(text)
+    supported_context_length = model.pos_emb.weight.shape[0]
+    # Note: In the book, this was originally written as pos_emb.weight.shape[1] by mistake
+    # It didn't break the code but would have caused unnecessary truncation (to 768 instead of 1024)
+
+    # Truncate sequences if they too long
+    input_ids = input_ids[:min(max_length, supported_context_length)]
+    assert max_length is not None, (
+        "max_length must be specified. If you want to use the full model context, "
+        "pass max_length=model.pos_emb.weight.shape[0]."
+    )
+    assert max_length <= supported_context_length, (
+        f"max_length ({max_length}) exceeds model's supported context length ({supported_context_length})."
+    )    
+    # Alternatively, a more robust version is the following one, which handles the max_length=None case better
+    # max_len = min(max_length,supported_context_length) if max_length else supported_context_length
+    # input_ids = input_ids[:max_len]
+    
+    # Pad sequences to the longest sequence
+    input_ids += [pad_token_id] * (max_length - len(input_ids))
+    input_tensor = torch.tensor(input_ids, device=device).unsqueeze(0) # add batch dimension
+
+    # Model inference
+    with torch.no_grad():
+        logits = model(input_tensor)[:, -1, :]  # Logits of the last output token
+    predicted_label = torch.argmax(logits, dim=-1).item()
+
+    # Return the classified result
+    return "spam" if predicted_label == 1 else "not spam"
+
+text_1 = (
+    "You are a winner you have been specially"
+    " selected to receive $1000 cash or a $2000 award."
+)
+
+print ('Max length in train set:', train_dataset.max_length)
+
+print(classify_review(
+    text_1, model, tokenizer, device, max_length=train_dataset.max_length
+))
+
+text_2 = (
+    "Hey, just wanted to check if we're still on"
+    " for dinner tonight? Let me know!"
+)
+
+print(classify_review(
+    text_2, model, tokenizer, device, max_length=train_dataset.max_length
+))
+
+# output 
+# Training completed in 0.89 minutes.
+# Training accuracy: 97.69%
+# Validation accuracy: 97.32%
+# Test accuracy: 96.67%
+# spam
+# not spam
+
+# save the model
+torch.save(model.state_dict(), "review_classifier_gpt_finetuning.pth")
